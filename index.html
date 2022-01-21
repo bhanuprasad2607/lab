@@ -1,5 +1,322 @@
 <pre>
 <code>
+3. For a given set of training data examples stored in a .CSV file, implement
+and demonstrate the Candidate-Elimination algorithm to output a description
+of the set of all hypotheses consistent with the training examples.
+import csv
+def get_domains(examples):
+ d=[set() for i in examples[0]]
+ for x in examples:
+ for i,xi in enumerate(x):
+ d[i].add(xi)
+ return [list(sorted(x)) for x in d]
+def more_general(h1,h2):
+ more_general_parts=[]
+ for x,y in zip(h1,h2):
+ mg=x=="?" or (x!="0" and (x==y or y=="0"))
+ more_general_parts.append(mg)
+ return all(more_general_parts)
+def min_generalizations(h,x):
+ h_new=list(h)
+ for i in range(len(h)):
+ if not more_general(h[i:i+1],x[i:i+1]):
+ h_new[i]='?' if h[i]!='0' else x[i]
+ return [tuple(h_new)]
+
+def min_specializations(h,domains,x):
+ results=[]
+ for i in range(len(h)):
+ if h[i]=="?":
+ for val in domains[i]:
+ if x[i]!=val:
+ h_new=h[:i]+(val,)+h[i+1:]
+ results.append(h_new)
+ return results
+
+def generalize_S(x,G,S):
+ S_prev=list(S)
+ for s in S_prev:
+ if not more_general(s,x):
+ S.remove(s)
+ Splus=min_generalizations(s,x)
+ S.update([h for h in Splus if any([more_general(g,h)for g in G])])
+ return S
+def specialize_G(x,domains,G,S):
+ G_prev=list(G)
+ for g in G_prev:
+ if more_general(g,x):
+ G.remove(g)
+ Gminus=min_specializations(g,domains,x)
+ G.update([h for h in Gminus if any([more_general(h,s)for s in S])])
+ return G
+def candidate_elimination(examples):
+ domains=get_domains(examples)[:-1]
+ n=len(domains)
+ G=set([("?",)*n])
+ S=set([("0",)*n])
+ print("Maximally specific hypothesis-S")
+ print("Maximally general hypothesis-G")
+ i=0
+ print("\nS[0]:",S,"\nG[0]:",G)
+ for xcx in examples:
+ i=i+1
+ x,cx=xcx[:-1], xcx[-1]
+ if cx=='Yes':
+ G={g for g in G if more_general(g,x)}
+ S=generalize_S(x,G,S)
+ else:
+ S={s for s in S if not more_general(s,x)}
+ G=specialize_G(x,domains,G,S)
+ print("\nS[{0}]:".format(i),S)
+ print("G[{0}]:".format(i),G)
+
+ return
+with open('C:/Users/CHANDAN/Desktop/ML Lab/Training12.csv') as cs:
+ examples=[tuple(line) for line in csv.reader(cs)]
+ candidate_elimination(examples)
+ 
+ ##########################################################################################
+ 4. Write a program to demonstrate the working of the decision tree based ID3 algorithm. Use
+an appropriate data set for building the decision tree and apply this knowledge to classify a
+new sample.
+import math
+import csv
+def load_csv(filename):
+ lines=csv.reader(open(filename,"r"))
+ dataset=list(lines)
+ headers=dataset.pop(0)
+ return dataset,headers
+class Node:
+ def __init__(self,attribute):
+ self.attribute=attribute
+ self.children=[]
+ self.ans=""
+def subtables(data,col,delete):
+ dic={}
+ coldata=[row[col] for row in data]
+ attr=list(set(coldata))
+ counts=[0]*len(attr)
+ r=len(data)
+ c=len(data[0])
+ for x in range(len(attr)):
+ for y in range(r):
+ if data[y][col]==attr[x]:
+ counts[x]+=1
+ for x in range(len(attr)):
+ dic[attr[x]]=[[0 for i in range(c)] for j in range(counts[x])]
+ pos=0
+ for y in range(r):
+ if data[y][col]==attr[x]:
+ if delete:
+ del data[y][col]
+ dic[attr[x]][pos]=data[y]
+ pos+=1
+ return attr,dic
+def entropy(S):
+ attr=list(set(S))
+ if len(attr)==1:
+ return 0
+ counts=[0,0]
+ for i in range(2):
+ counts[i]=(sum([1 for x in S if attr[i]==x])/(len(S)*1.0))
+ sums=0
+ for cnt in counts:
+ sums=sums+(-1*cnt*math.log(cnt,2))
+ return sums
+def compute_gain(data,col):
+ attrValues,dic=subtables(data,col,delete=False)
+ total_entropy=entropy([row[-1] for row in data])
+ for x in range(len(attrValues)):
+ ratio=len(dic[attrValues[x]])/(len(data)*1.0)
+ entro=entropy([row[-1] for row in dic[attrValues[x]]])
+ total_entropy-=ratio*entro
+ return total_entropy
+def build_tree(data,features):
+ lastcol=[row[-1] for row in data]
+ if (len(set(lastcol)))==1:
+ node=Node("")
+ node.ans=lastcol[0]
+ return node
+ n=len(data[0])-1
+ gains=[0]*n
+ for col in range(n):
+ gains[col]=compute_gain(data,col)
+ split=gains.index(max(gains))
+ node=Node(features[split])
+ fea=features[:split]+features[split+1:]
+ attr,dic=subtables(data,split,delete=True)
+ for x in range(len(attr)):
+ child=build_tree(dic[attr[x]],fea)
+ node.children.append((attr[x],child))
+ return node
+def print_tree(node,level):
+ if node.ans!="":
+ print(" "*level,node.ans)
+ return
+ print(" "*level,node.attribute)
+ for value,n in node.children:
+ print(" "*(level+1),value)
+ print_tree(n,level+2)
+
+def classify(node,x_test,features):
+ if node.ans!="":
+ print(node.ans)
+ return
+ pos=features.index(node.attribute)
+ for value,n in node.children:
+ if x_test[pos]==value:
+ classify(n,x_test,features)
+dataset,features=load_csv("C:/Users/CHANDAN/Desktop/ tennis(3PGM).csv")
+node=build_tree(dataset,features)
+print("The Decision Tree using ID3 Algorithm is: ")
+print_tree(node,0)
+testdata,fetures=load_csv("C:/Users/CHANDAN/Desktop /test(3PGM).csv")
+for test in testdata:
+ print("The test instance",test)
+ print("The predicted label:",end="")
+ classify(node,test,features)
+ 
+  
+ ##########################################################################################
+ import numpy as np
+X = np.array(([2, 9], [1, 5], [3, 6]), dtype=float) # Features ( Hrs Slept, Hrs Studied)
+y = np.array(([92], [86], [89]), dtype=float) # Labels(Marks obtained)
+X = X/np.amax(X,axis=0) # Normalize
+y = y/100
+def sigmoid(x):
+ return 1/(1 + np.exp(-x))
+def sig_grad(x):
+ return x * (1 - x)
+epoch=1000
+lr=0.2
+input_neurons =2
+hidden_neurons =3
+output_neurons =1
+# Weight and bias - Random initialization
+wh=np.random.uniform(size=(input_neurons,hidden_neurons))
+bh=np.random.uniform(size=(1,hidden_neurons))
+wout=np.random.uniform(size=(hidden_neurons,output_neurons))
+bout=np.random.uniform(size=(1,output_neurons))
+for i in range(epoch):
+ #Forward Propogation
+ hidip=np.dot(X,wh) + bh
+ hidact =sigmoid(hidip)
+ outip=np.dot(hidact,wout) + bout
+ output = sigmoid(outip)
+ #Backpropagation
+ Errout = y-output
+ outgrad = sig_grad(output)
+ d_output = Errout* outgrad
+ # Error at Hidden later
+ Errhid = d_output.dot(wout.T)
+ hidgrad = sig_grad(hidact)
+ d_hidden = Errhid * hidgrad
+ #Update weight
+ wout += hidact.T.dot(d_output) *lr
+ wh += X.T.dot(d_hidden) *lr
+print(wh)
+print(wout)
+print("Normalized Input: \n" + str(X))
+print("Actual Output: \n" + str(y))
+print("Predicted Output: \n" ,output)
+
+##########################################################################################
+import csv
+import random
+import math
+def safe_div(x,y):
+ if y == 0:
+ return 0
+ return x / y
+def loadCsv(filename):
+ lines = csv.reader(open(filename, "r"));
+ dataset = list(lines)
+ for i in range(len(dataset)):
+ dataset[i] = [float(x) for x in dataset[i]]
+ return dataset
+def splitDataset(dataset, splitRatio):
+ trainSize = int(len(dataset) * splitRatio);
+ trainSet = []
+ copy = list(dataset);
+ i=0
+ while len(trainSet) < trainSize:
+ trainSet.append(copy.pop(i))
+ return [trainSet, copy]
+def separateByClass(dataset):
+ separated = {}
+ for i in range(len(dataset)):
+ vector = dataset[i]
+ if (vector[-1] not in separated):
+ separated[vector[-1]] = []
+ separated[vector[-1]].append(vector)
+ return separated
+def mean(numbers):
+ return sum(numbers)/float(len(numbers))
+def stdev(numbers):
+ avg = mean(numbers)
+ variance = sum([pow(x-avg,2) for x in numbers])/float(len(numbers)-1)
+ return math.sqrt(variance)
+def summarize(dataset):
+ summaries = [(mean(attribute), stdev(attribute)) for attribute in zip(*dataset)];
+ del summaries[-1]
+ return summaries
+def summarizeByClass(dataset):
+ separated = separateByClass(dataset);
+ summaries = {}
+ for classValue, instances in separated.items():
+ summaries[classValue] = summarize(instances)
+ return summaries
+def calculateProbability(x, mean, stdev):
+ exponent = math.exp(-safe_div(math.pow(x-mean,2),(2*math.pow(stdev,2))))
+ return (safe_div(1,(math.sqrt(2*math.pi) * stdev))) * exponent
+def calculateClassProbabilities(summaries, inputVector):
+ probabilities = {}
+ for classValue, classSummaries in summaries.items():
+ probabilities[classValue] = 1
+ for i in range(len(classSummaries)):
+ mean, stdev = classSummaries[i]
+ x = inputVector[i] #testvector's first attribute
+ probabilities[classValue] *= calculateProbability(x, mean, stdev);
+ return probabilities
+def predict(summaries, inputVector):
+ probabilities = calculateClassProbabilities(summaries, inputVector)
+ bestLabel, bestProb = None, -1
+ for classValue, probability in probabilities.items():
+ if bestLabel is None or probability > bestProb:
+ bestProb = probability
+ bestLabel = classValue
+ return bestLabel
+def getPredictions(summaries, testSet):
+ predictions = []
+ for i in range(len(testSet)):
+ result = predict(summaries, testSet[i])
+ predictions.append(result)
+ return predictions
+def getAccuracy(testSet, predictions):
+ correct = 0
+ for i in range(len(testSet)):
+ if testSet[i][-1] == predictions[i]:
+ correct += 1
+ return (correct/float(len(testSet))) * 100.0
+def main():
+ filename = 'C:/Users/CHANDAN/Desktop/11a.csv'
+ splitRatio = 0.9
+ dataset = loadCsv(filename);
+ trainingSet, testSet = splitDataset(dataset, splitRatio)
+ print('Split {0} rows into train={1} and test={2} rows'.format(len(dataset),len(trainingSet),len(testSet)))
+ summaries = summarizeByClass(trainingSet);
+ predictions = getPredictions(summaries, testSet)
+ actual = []
+ for i in range(len(testSet)):
+ vector = testSet[i]
+ actual.append(vector[-1])
+ print('Actual values: {0}%'.format(actual))
+ print('Predictions: {0}%'.format(predictions))
+ accuracy = getAccuracy(testSet, predictions)
+ print('Accuracy of the classifier is : {0}%'.format(accuracy))
+main()
+ ##########################################################################################  
+   
 import matplotlib.pyplot as plt
 from sklearn import datasets
 from sklearn.cluster import KMeans
@@ -40,5 +357,131 @@ plt.scatter(X.Petal_Lenght,X.Petal_Width,c=colormap[gmm_y],s=40)
 plt.title('GMM clustering')
 plt.xlabel('Petal Lenght')
 plt.ylabel('Petal Width')
+   
+#######################################################################################
+import csv
+import random
+import math
+import operator
+def loadDataset(filename, split, trainingSet=[] ,
+testSet=[]):
+ with open(filename, 'r') as csvfile:
+ lines = csv.reader(csvfile)
+ dataset = list(lines)
+ for x in range(len(dataset)-1):
+ for y in range(4):
+ dataset[x][y] = float(dataset[x][y])
+ if random.random() < split:
+ trainingSet.append(dataset[x])
+ else:
+ testSet.append(dataset[x])
+def euclideanDistance(instance1, instance2,
+length):
+ distance = 0
+ for x in range(length):
+ distance += pow((instance1[x] -
+instance2[x]), 2)
+ return math.sqrt(distance)
+def getNeighbors(trainingSet, testInstance, k):
+ distances = []
+ length = len(testInstance)-1
+ for x in range(len(trainingSet)):
+ dist = euclideanDistance(testInstance,
+trainingSet[x], length)
+ distances.append((trainingSet[x], dist))
+ distances.sort(key=operator.itemgetter(1))
+ neighbors = []
+ for x in range(k):
+ neighbors.append(distances[x][0])
+ return neighbors
+def getResponse(neighbors):
+ classVotes = {}
+ for x in range(len(neighbors)):
+ response = neighbors[x][-1]
+ if response in classVotes:
+ classVotes[response] += 1
+ else:
+ classVotes[response] = 1
+ sortedVotes = sorted(classVotes.items(),
+key=operator.itemgetter(1),reverse=True)
+ return sortedVotes[0][0]
+def getAccuracy(testSet, predictions):
+ correct = 0
+ for x in range(len(testSet)):
+ if testSet[x][-1] == predictions[x]:
+ correct += 1
+ return (correct/float(len(testSet))) * 100.0
+def main():
+# prepare data
+ trainingSet=[]
+ testSet=[]
+ split = 0.67
+
+loadDataset('C:/Users/CHANDAN/Desktop/Ne
+w folder (2)/dataset/iris(9PGM).csv', split,
+trainingSet, testSet)
+ print('Train set: ' + repr(len(trainingSet)))
+ print('Test set: ' + repr(len(testSet)))
+ # generate predictions
+ predictions=[]
+ k = 3
+ for x in range(len(testSet)):
+ neighbors = getNeighbors(trainingSet,
+testSet[x], k)
+ result = getResponse(neighbors)
+ predictions.append(result)
+ print('> predicted=' + repr(result) + ',
+actual=' + repr(testSet[x][-1]))
+ accuracy = getAccuracy(testSet,
+predictions)
+ print('Accuracy: ' + repr(accuracy) + '%')
+main()
+
+
+
+############################################################################
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+def kernel(point,xmat, k):
+ m,n = np.shape(xmat)
+ weights = np.mat(np.eye((m))) # eye - identity matrix
+ for j in range(m):
+ diff = point - X[j]
+ weights[j,j] = np.exp(diff*diff.T/(-2.0*k**2))
+ return weights
+def localWeight(point,xmat,ymat,k):
+ wei = kernel(point,xmat,k)
+ W = (X.T*(wei*X)).I*(X.T*(wei*ymat.T))
+ return W
+def localWeightRegression(xmat,ymat,k):
+ m,n = np.shape(xmat)
+ ypred = np.zeros(m)
+ for i in range(m):
+ ypred[i] = xmat[i]*localWeight(xmat[i],xmat,ymat,k)
+ return ypred
+def graphPlot(X,ypred):
+ sortindex = X[:,1].argsort(0) #argsort - index of the smallest
+ xsort = X[sortindex][:,0]
+ fig = plt.figure()
+ ax = fig.add_subplot(1,1,1)
+ ax.scatter(bill,tip, color='green')
+ ax.plot(xsort[:,1],ypred[sortindex], color = 'red', linewidth=5)
+ plt.xlabel('Total bill')
+ plt.ylabel('Tip')
+ plt.show();
+# load data points
+data = pd.read_csv('E:\\data10.csv')
+bill = np.array(data.total_bill) # We use only Bill amount and Tips data
+tip = np.array(data.tip)
+mbill = np.mat(bill) # .mat will convert nd array is converted in 2D array
+mtip = np.mat(tip)
+m= np.shape(mbill)[1]
+one = np.mat(np.ones(m))
+X = np.hstack((one.T,mbill.T)) # 244 rows, 2 cols
+# increase k to get smooth curves
+ypred = localWeightRegression(X,mtip,3)
+graphPlot(X,ypred)
 </code>
 </pre>
